@@ -3,7 +3,9 @@ package com.activitytracker.app.feature.addedit
 import androidx.compose.ui.res.stringResource
 import com.activitytracker.app.R
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -13,6 +15,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -221,21 +224,28 @@ fun AddEditActivityScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // Activity type selector
-            Text(stringResource(R.string.activity_type), style = MaterialTheme.typography.labelLarge)
-            state.activityTypes.forEach { type ->
-                val selected = type.id == state.selectedTypeId
-                FilterChip(
-                    selected = selected,
-                    onClick = { viewModel.onTypeSelected(type.id) },
-                    label = { Text(type.name) }
-                )
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(stringResource(R.string.activity_type), style = MaterialTheme.typography.labelLarge)
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    state.activityTypes.forEach { type ->
+                        val selected = type.id == state.selectedTypeId
+                        FilterChip(
+                            selected = selected,
+                            onClick = { viewModel.onTypeSelected(type.id) },
+                            label = { Text(type.name, style = MaterialTheme.typography.labelMedium) },
+                            modifier = Modifier.height(32.dp)
+                        )
+                    }
+                }
             }
-
-            HorizontalDivider()
 
             // Time fields
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -271,13 +281,23 @@ fun AddEditActivityScreen(
             )
 
             // Completed toggle
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                shape = RoundedCornerShape(8.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text(stringResource(R.string.completed), style = MaterialTheme.typography.bodyMedium)
-                Switch(checked = state.isCompleted, onCheckedChange = viewModel::onCompletedToggle)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                ) {
+                    Text(stringResource(R.string.completed), style = MaterialTheme.typography.bodyMedium)
+                    Switch(
+                        checked = state.isCompleted, 
+                        onCheckedChange = viewModel::onCompletedToggle,
+                        modifier = Modifier.scale(0.8f)
+                    )
+                }
             }
 
             // Notes
@@ -285,20 +305,20 @@ fun AddEditActivityScreen(
                 value = state.notesText,
                 onValueChange = viewModel::onNotesChanged,
                 label = { Text(stringResource(R.string.notes_optional)) },
-                maxLines = 4,
+                maxLines = 3,
                 modifier = Modifier.fillMaxWidth()
             )
 
             if (viewModel.isEditMode) {
-                Spacer(Modifier.height(8.dp))
                 OutlinedButton(
                     onClick = { showDeleteConfirm = true },
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(0.dp)
                 ) {
-                    Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.delete_activity))
+                    Text(stringResource(R.string.delete_activity), style = MaterialTheme.typography.labelLarge)
                 }
             }
         }

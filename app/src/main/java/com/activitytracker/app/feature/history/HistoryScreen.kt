@@ -225,8 +225,9 @@ fun HistoryScreen(
                     TimelineRow(
                         record = record,
                         accentColor = Color(colorLong),
-                        onClick = { onNavigateToAddEdit(state.selectedDate.toString(), record.id) },
-                        modifier = Modifier.padding(horizontal = 16.dp)
+                        modifier = Modifier
+                            .padding(horizontal = 16.dp)
+                            .clickable { onNavigateToAddEdit(state.selectedDate.toString(), record.id) }
                     )
                     HorizontalDivider(
                         modifier = Modifier.padding(horizontal = 16.dp),

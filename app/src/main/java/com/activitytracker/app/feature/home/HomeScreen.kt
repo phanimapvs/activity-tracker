@@ -25,6 +25,8 @@ import com.activitytracker.app.core.util.categoryColor
 import com.activitytracker.app.domain.model.*
 import com.activitytracker.app.ui.components.*
 import com.activitytracker.app.ui.theme.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import kotlinx.coroutines.delay
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
@@ -47,6 +49,7 @@ fun HomeScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var editingMealSubCategory by remember { mutableStateOf<ActivitySubCategory?>(null) }
     var pendingQuickAction by remember { mutableStateOf<QuickActionPending?>(null) }
+    val snackbarHostState = remember { SnackbarHostState() }
 
     // Dialog states for Work & Sleep
     var showSleepTrackingDialog by remember { mutableStateOf(false) }
@@ -150,6 +153,13 @@ fun HomeScreen(
         )
     }
 
+    LaunchedEffect(state.snackbarMessage) {
+        state.snackbarMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.dismissSnackbar()
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -176,127 +186,132 @@ fun HomeScreen(
                     containerColor = MaterialTheme.colorScheme.background
                 )
             )
-        }
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(
-                top = padding.calculateTopPadding() + 8.dp,
-                bottom = padding.calculateBottomPadding() + 80.dp,
-                start = 16.dp,
-                end = 16.dp
-            ),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+        PullToRefreshBox(
+            isRefreshing = state.isRefreshing,
+            onRefresh = { viewModel.refresh() },
+            modifier = Modifier.padding(padding)
         ) {
-            // --- One-Time Action Quick Icons ---
-            item(key = "quick_actions") {
-                QuickActionsSection(
-                    isWorking = ongoingWorkRecord != null,
-                    onWakeUp = {
-                        pendingQuickAction = QuickActionPending("Wake Up", ActivityCategory.WAKE)
-                    },
-                    onSleep = {
-                        showSleepTrackingDialog = true
-                    },
-                    onBreakfast = {
-                        pendingQuickAction = QuickActionPending("Breakfast", ActivityCategory.MEAL, ActivitySubCategory.BREAKFAST)
-                    },
-                    onLunch = {
-                        pendingQuickAction = QuickActionPending("Lunch", ActivityCategory.MEAL, ActivitySubCategory.LUNCH)
-                    },
-                    onDinner = {
-                        pendingQuickAction = QuickActionPending("Dinner", ActivityCategory.MEAL, ActivitySubCategory.DINNER)
-                    },
-                    onWorkToggle = {
-                        if (ongoingWorkRecord != null) {
-                            showWorkStopDialog = true
-                        } else {
-                            showWorkStartDialog = true
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(
+                    top = 8.dp,
+                    bottom = 80.dp,
+                    start = 16.dp,
+                    end = 16.dp
+                ),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // --- One-Time Action Quick Icons ---
+                item(key = "quick_actions") {
+                    QuickActionsSection(
+                        isWorking = ongoingWorkRecord != null,
+                        onWakeUp = {
+                            pendingQuickAction = QuickActionPending("Wake Up", ActivityCategory.WAKE)
+                        },
+                        onSleep = {
+                            showSleepTrackingDialog = true
+                        },
+                        onBreakfast = {
+                            pendingQuickAction = QuickActionPending("Breakfast", ActivityCategory.MEAL, ActivitySubCategory.BREAKFAST)
+                        },
+                        onLunch = {
+                            pendingQuickAction = QuickActionPending("Lunch", ActivityCategory.MEAL, ActivitySubCategory.LUNCH)
+                        },
+                        onDinner = {
+                            pendingQuickAction = QuickActionPending("Dinner", ActivityCategory.MEAL, ActivitySubCategory.DINNER)
+                        },
+                        onWorkToggle = {
+                            if (ongoingWorkRecord != null) {
+                                showWorkStopDialog = true
+                            } else {
+                                showWorkStartDialog = true
+                            }
                         }
-                    }
-                )
-            }
-
-            // --- EMPTY STOMACH CONDITION CARD ---
-            state.emptyStomachReadiness?.let { readiness ->
-                item(key = "empty_stomach_card") {
-                    EmptyStomachCard(readiness = readiness)
-                }
-            }
-
-            // --- Sleep Card (Clickable to open Sleep Tracking Dialog) ---
-            state.stats?.sleepSummary?.let { sleep ->
-                item(key = "sleep_summary") {
-                    SleepCard(
-                        sleep = sleep,
-                        use24h = state.use24h,
-                        onCardClick = { showSleepTrackingDialog = true }
                     )
                 }
-            }
 
-            // --- Mobile Screen Time Card ---
-            item(key = "mobile_screen_time_card") {
-                MobileScreenTimeCard(
-                    screenTimeMinutes = state.stats?.mobileScreenTimeMinutes,
-                    hasPermission = state.hasUsagePermission
-                )
-            }
-
-            // --- Sadhana Section ---
-            state.stats?.plannedSessions?.let { sessions ->
-                if (sessions.isNotEmpty()) {
-                    item(key = "sadhana_header") {
-                        SadhanaSectionHeader(stats = state.stats!!)
+                // --- EMPTY STOMACH CONDITION CARD ---
+                state.emptyStomachReadiness?.let { readiness ->
+                    item(key = "empty_stomach_card") {
+                        EmptyStomachCard(readiness = readiness)
                     }
-                    items(sessions, key = { it.plan.id }) { pva ->
-                        SadhanaCard(
-                            plannedVsActual = pva,
-                            accentColor = ColorSadhana,
+                }
+
+                // --- Sleep Card (Clickable to open Sleep Tracking Dialog) ---
+                state.stats?.sleepSummary?.let { sleep ->
+                    item(key = "sleep_summary") {
+                        SleepCard(
+                            sleep = sleep,
                             use24h = state.use24h,
-                            onToggleComplete = { viewModel.onSadhanaToggleTapped(it) },
-                            onEditNote = { record ->
-                                onNavigateToActivityDetail(record.id)
-                            },
-                            onCardClick = {
-                                pva.actualRecord?.let { record ->
-                                    onNavigateToActivityDetail(record.id)
-                                } ?: onNavigateToAddActivity(pva.plan.activityTypeId)
-                            }
+                            onCardClick = { showSleepTrackingDialog = true }
                         )
                     }
                 }
-            }
 
-            // --- Meals Card (Interactive Manual Time Edit on Tap) ---
-            state.stats?.let { stats ->
-                item(key = "meals_summary") {
-                    MealsCard(
-                        stats = stats,
-                        use24h = state.use24h,
-                        onMealClick = { sub -> editingMealSubCategory = sub }
+                // --- Mobile Screen Time Card ---
+                item(key = "mobile_screen_time_card") {
+                    MobileScreenTimeCard(
+                        screenTimeMinutes = state.stats?.mobileScreenTimeMinutes,
+                        hasPermission = state.hasUsagePermission
                     )
                 }
-            }
 
-            // --- Timeline (Today, Compact View) ---
-            state.stats?.let { _ ->
-                item(key = "timeline_header") {
-                    TimelineSectionHeader(onViewAll = onNavigateToTimeline)
+                // --- Sadhana Section ---
+                state.stats?.plannedSessions?.let { sessions ->
+                    if (sessions.isNotEmpty()) {
+                        item(key = "sadhana_header") {
+                            SadhanaSectionHeader(stats = state.stats!!)
+                        }
+                        items(sessions, key = { it.plan.id }) { pva ->
+                            SadhanaCard(
+                                plannedVsActual = pva,
+                                accentColor = ColorSadhana,
+                                use24h = state.use24h,
+                                onToggleComplete = { viewModel.onSadhanaToggleTapped(it) },
+                                onEditNote = { record ->
+                                    onNavigateToActivityDetail(record.id)
+                                },
+                                onCardClick = {
+                                    pva.actualRecord?.let { record ->
+                                        onNavigateToActivityDetail(record.id)
+                                    } ?: onNavigateToAddActivity(pva.plan.activityTypeId)
+                                }
+                            )
+                        }
+                    }
                 }
-                item(key = "timeline_button") {
-                    OutlinedButton(
-                        onClick = onNavigateToTimeline,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(Icons.Default.Timeline, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("Open Full Interactive Timeline →", style = MaterialTheme.typography.labelSmall)
+
+                // --- Meals Card (Interactive Manual Time Edit on Tap) ---
+                state.stats?.let { stats ->
+                    item(key = "meals_summary") {
+                        MealsCard(
+                            stats = stats,
+                            use24h = state.use24h,
+                            onMealClick = { sub -> editingMealSubCategory = sub }
+                        )
+                    }
+                }
+
+                // --- Timeline (Today, Compact View) ---
+                state.stats?.let { _ ->
+                    item(key = "timeline_header") {
+                        TimelineSectionHeader(onViewAll = onNavigateToTimeline)
+                    }
+                    item(key = "timeline_button") {
+                        OutlinedButton(
+                            onClick = onNavigateToTimeline,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.Timeline, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Open Full Interactive Timeline →", style = MaterialTheme.typography.labelSmall)
+                        }
                     }
                 }
             }
         }
     }
 }
-
-

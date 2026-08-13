@@ -273,13 +273,19 @@ fun TimelineRow(
     record: ActivityRecord,
     accentColor: Color,
     use24h: Boolean = true,
-    onClick: () -> Unit,
+    isSelected: Boolean = false,
     modifier: Modifier = Modifier
 ) {
+    val backgroundColor by animateColorAsState(
+        targetValue = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+        label = "bg_color"
+    )
+
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .clip(RoundedCornerShape(8.dp))
+            .background(backgroundColor)
             .padding(vertical = 6.dp, horizontal = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -305,7 +311,7 @@ fun TimelineRow(
                 modifier = Modifier
                     .size(10.dp)
                     .clip(CircleShape)
-                    .background(accentColor)
+                    .background(if (isSelected) MaterialTheme.colorScheme.primary else accentColor)
             )
         }
 
@@ -314,8 +320,8 @@ fun TimelineRow(
             Text(
                 text = record.activityType?.name ?: "Unknown",
                 style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurface
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
             )
             if (record.durationMinutes != null && record.durationMinutes > 0) {
                 Text(
@@ -326,8 +332,15 @@ fun TimelineRow(
             }
         }
 
-        // Completed checkmark
-        if (record.isCompleted) {
+        // Completed checkmark or selection indicator
+        if (isSelected) {
+            Icon(
+                Icons.Default.Check,
+                contentDescription = "Selected",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp)
+            )
+        } else if (record.isCompleted) {
             Icon(
                 Icons.Default.Check,
                 contentDescription = "Completed",

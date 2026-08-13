@@ -38,7 +38,8 @@ data class HomeUiState(
     val emptyStomachReadiness: PracticeReadinessResult? = null,
     val pendingSadhanaCompletion: PlannedVsActual? = null, // drives the duration dialog
     val hasUsagePermission: Boolean = false,
-    val snackbarMessage: String? = null
+    val snackbarMessage: String? = null,
+    val isRefreshing: Boolean = false
 ) {
     val isWorking: Boolean get() = ongoingActivities.any { it.activityType?.category == ActivityCategory.WORK }
     val isSleeping: Boolean get() = ongoingActivities.any { it.activityType?.category == ActivityCategory.SLEEP }
@@ -344,6 +345,25 @@ class HomeViewModel @Inject constructor(
     fun onNoteEditRequested(record: ActivityRecord, newNote: String) {
         viewModelScope.launch {
             saveActivity(record.copy(notes = newNote))
+        }
+    }
+
+    fun refresh() {
+        if (_uiState.value.isRefreshing) return
+        
+        viewModelScope.launch {
+            _uiState.update { it.copy(isRefreshing = true) }
+            try {
+                if (screenTimeCalculator.hasUsageAccessPermission()) {
+                    screenTimeRepository.syncPastDays(1)
+                }
+                // Ticker emit will trigger combine anyway, but let's wait a bit to simulate/ensure work
+                kotlinx.coroutines.delay(500)
+            } catch (e: Exception) {
+                _uiState.update { it.copy(snackbarMessage = "Refresh failed: ${e.message}") }
+            } finally {
+                _uiState.update { it.copy(isRefreshing = false) }
+            }
         }
     }
 

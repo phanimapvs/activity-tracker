@@ -11,6 +11,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
@@ -43,17 +44,35 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), UserPreferences())
 
     val hasUsagePermission = MutableStateFlow(false)
+    val isSyncing = MutableStateFlow(false)
+    val syncMessage = MutableStateFlow<String?>(null)
 
     fun checkUsagePermission() {
         hasUsagePermission.value = screenTimeCalculator.hasUsageAccessPermission()
     }
 
-    fun syncScreenTime() = viewModelScope.launch {
-        screenTimeRepository.syncPastDays(7)
+    fun syncScreenTime() {
+        if (isSyncing.value) return
+        viewModelScope.launch {
+            isSyncing.value = true
+            try {
+                screenTimeRepository.syncPastDays(7)
+                syncMessage.value = "Screen Time sync complete"
+            } catch (e: Exception) {
+                syncMessage.value = "Screen Time sync failed"
+            } finally {
+                isSyncing.value = false
+            }
+        }
     }
 
     fun deleteScreenTimeHistory() = viewModelScope.launch {
         screenTimeRepository.deleteHistory()
+        syncMessage.value = "Screen Time data cleared"
+    }
+
+    fun dismissSyncMessage() {
+        syncMessage.value = null
     }
 
     fun setTimeFormat24h(v: Boolean) = viewModelScope.launch { prefs.setTimeFormat24h(v) }
@@ -71,9 +90,43 @@ fun SettingsScreen(
 ) {
     val prefs by viewModel.preferences.collectAsStateWithLifecycle()
     val hasUsagePermission by viewModel.hasUsagePermission.collectAsStateWithLifecycle()
+    val isSyncing by viewModel.isSyncing.collectAsStateWithLifecycle()
+    val syncMessage by viewModel.syncMessage.collectAsStateWithLifecycle()
+
     val esConfig = prefs.emptyStomachConfig
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    var showClearConfirm by remember { mutableStateOf(false) }
+
+    LaunchedEffect(syncMessage) {
+        syncMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.dismissSyncMessage()
+        }
+    }
+
+    if (showClearConfirm) {
+        AlertDialog(
+            onDismissRequest = { showClearConfirm = false },
+            title = { Text("Clear Screen Time Data?") },
+            text = { Text("This will permanently delete the recorded screen-time history from this device.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.deleteScreenTimeHistory()
+                    showClearConfirm = false
+                }) {
+                    Text("Clear", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearConfirm = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -91,7 +144,8 @@ fun SettingsScreen(
                 title = { Text(stringResource(R.string.settings)) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
-        }
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         LazyColumn(contentPadding = PaddingValues(
             top = padding.calculateTopPadding() + 8.dp,
@@ -122,7 +176,7 @@ fun SettingsScreen(
                     )
                     SettingsNavItem(
                         icon = Icons.Default.Sync,
-                        label = stringResource(R.string.sync_screen_time),
+                        label = if (isSyncing) "Syncing..." else stringResource(R.string.sync_screen_time),
                         subtitle = stringResource(R.string.sync_screen_time_desc),
                         onClick = { viewModel.syncScreenTime() }
                     )
@@ -130,7 +184,7 @@ fun SettingsScreen(
                         icon = Icons.Default.DeleteForever,
                         label = stringResource(R.string.delete_history),
                         subtitle = stringResource(R.string.delete_history_desc),
-                        onClick = { viewModel.deleteScreenTimeHistory() }
+                        onClick = { showClearConfirm = true }
                     )
                 } else {
                     ListItem(
