@@ -9,7 +9,7 @@ plugins {
 
 android {
     namespace = "com.activitytracker.app"
-    compileSdk = 36
+    compileSdk = 37
     defaultConfig {
         applicationId = "com.activitytracker.app"
         minSdk = 31
@@ -22,7 +22,9 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
     compileOptions {
